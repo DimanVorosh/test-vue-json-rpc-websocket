@@ -5,9 +5,11 @@ export default class WebSocketClient {
     this.options = options || this.defaultOptions()
     if (this.options) {
       if (options.reconnectEnabled) {
-        this.reconnectEnabled = options.reconnectEnabled || false
+        this.reconnectEnabled = options.reconnectEnabled
         if (this.reconnectEnabled) {
           this.reconnectInterval = options.reconnectInterval
+          this.reconnectAttempts = options.recconectAttempts
+          this.reconnectCount = 1
         }
       }
       if (options.store) {
@@ -34,6 +36,7 @@ export default class WebSocketClient {
     return {
       reconnectEnabled: false,
       reconnectInterval: 0,
+      recconectAttempts: 0,
       store: undefined
     }
   }
@@ -53,42 +56,61 @@ export default class WebSocketClient {
     this.instance = new WebSocket(this.url)
 
     this.instance.onopen = () => {
+      if (this.reconnectEnabled) {
+        this.reconnectCount = 1
+      }
       if (typeof this.onOpen === 'function') {
         this.onOpen()
       } else if (this.store) {
         this.passToStore('socket_on_open', event)
       }
     }
+
     this.instance.onmessage = (msg) => {
       let data = JSON.parse(msg.data)
       if (typeof this.onMessage === 'function') {
         this.onMessage(data)
       } else if (this.store) {
-        let action = this.wsData.filter(item => item.id === data.id)[0].action
-        this.store.dispatch(action, data.result)
+        this.store.dispatch(
+          this.wsData.filter(item => item.id === data.id)[0].action,
+          data.result
+        )
         this.passToStore('socket_on_message', data)
       }
     }
+
     this.instance.onclose = (e) => {
       if (typeof this.onClose === 'function') {
         this.onClose(e)
+      } else if (this.store) {
+        this.passToStore('socket_on_close', e)
       }
       if (!e.wasClean && this.reconnectEnabled) {
         this.reconnect()
       }
     }
+
     this.instance.onerror = (e) => {
       if (typeof this.onError === 'function') {
         this.onError(e)
+      } else if (this.store) {
+        this.passToStore('socket_on_error', e)
       }
     }
   }
 
   reconnect () {
-    delete this.instance
-    setTimeout(() => {
-      this.connect()
-    }, this.reconnectInterval)
+    console.log(this.reconnectCount, this.reconnectAttempts)
+    if (this.reconnectCount <= this.reconnectAttempts) {
+      this.reconnectCount++
+      delete this.instance
+      setTimeout(() => {
+        this.connect()
+        if (this.store) { this.passToStore('socket_reconnect', this.reconnectCount) }
+      }, this.reconnectInterval)
+    } else {
+      if (this.store) { this.passToStore('socket_reconnect_error', true) }
+    }
   }
 
   sendObj (method, params, action = '') {

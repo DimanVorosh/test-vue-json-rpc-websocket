@@ -1,10 +1,7 @@
 <template>
-  <v-content>
-    Home page
-    <v-btn @click="$router.push('/about')">
-      About
-    </v-btn>
-  </v-content>
+  <div>
+
+  </div>
 </template>
 
 <script>
@@ -12,3 +9,7 @@ export default {
   name: 'Home'
 }
 </script>
+
+<style lang='scss' scoped>
+
+</style>
